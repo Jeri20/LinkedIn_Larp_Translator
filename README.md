@@ -88,3 +88,6 @@ Everything you'd want to change is in the `CONFIG` block near the top of the scr
 ## License
 
 <!-- Add a LICENSE file (MIT is a simple choice) and name it here. -->
+
+
+https://linkedin-larp-translator.vercel.app/
