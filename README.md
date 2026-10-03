@@ -2,7 +2,9 @@
 
 Paste a long, "humbled and honored" LinkedIn post. Get the one-line truth.
 
-**Live demo:** <!-- paste your Vercel or GitHub Pages link here --><img width="855" height="882" alt="image" src="https://github.com/user-attachments/assets/283119ba-47b6-485f-b510-838e1dda7ee1" />
+**Live demo:** https://linkedin-larp-translator.vercel.app/
+<!-- paste your Vercel or GitHub Pages link here -->
+<img width="855" height="882" alt="image" src="https://github.com/user-attachments/assets/283119ba-47b6-485f-b510-838e1dda7ee1" />
 
 
 ## What it does
@@ -89,4 +91,4 @@ Everything you'd want to change is in the `CONFIG` block near the top of the scr
 <!-- Add a LICENSE file (MIT is a simple choice) and name it here. -->
 
 
-https://linkedin-larp-translator.vercel.app/
+
