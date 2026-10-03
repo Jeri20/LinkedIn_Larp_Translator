@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LinkedIn Larp Translator</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --card: #ffffff; --text: #1d1b18; --muted: #6a645c;
+    --accent: #0a66c2; --accent-text: #ffffff; --border: #e2ddd4; --warn: #8a5a00; --warn-bg: #fff4d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141312; --card: #1e1c1a; --text: #f1ede7; --muted: #a09a91;
+      --accent: #5aa9f0; --accent-text: #0b1a28; --border: #34312c; --warn: #f0c36a; --warn-bg: #3a2f14;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 32px 16px 56px; }
+  h1 { font-size: 1.8rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  textarea {
+    width: 100%; min-height: 220px; padding: 14px; font: inherit; color: var(--text);
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px; resize: vertical;
+  }
+  textarea:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .row { display: flex; gap: 10px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
+  button {
+    font: inherit; font-weight: 600; padding: 12px 22px; border: 0; border-radius: 10px;
+    background: var(--accent); color: var(--accent-text); cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--border); padding: 8px 14px; font-size: .9rem; }
+  select { font: inherit; padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--text); max-width: 100%; }
+  .warn { background: var(--warn-bg); color: var(--warn); padding: 12px 14px; border-radius: 10px; margin-bottom: 16px; }
+  #progress { display: none; margin: 8px 0 16px; }
+  #track { height: 8px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  #bar { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  #ptext { display: block; color: var(--muted); font-size: .85rem; margin-top: 6px; }
+  #status { color: var(--muted); font-size: .9rem; margin: 4px 0 8px; min-height: 1.2em; }
+  #out { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-top: 8px; }
+  .label { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 6px; }
+  #result { font-size: 1.35rem; line-height: 1.4; font-weight: 600; margin: 0 0 14px; }
+  #diag { white-space: pre-wrap; font: .85rem/1.5 ui-monospace, Menlo, Consolas, monospace; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 8px; }
+  footer { color: var(--muted); font-size: .85rem; margin-top: 28px; }
+</style>
+</head>
+<body>
+<main>
+  <!-- Default text is written here so the page is never blank, even if scripts are blocked -->
+  <h1 id="title">LinkedIn Larp Translator</h1>
+  <p class="sub" id="sub">Paste the long, humbled-and-honored post. Get the one-line truth.</p>
+
+  <div id="gpuwarn" class="warn" hidden>
+    This page needs a browser with WebGPU. Please open it in a recent Chrome or Edge on a laptop, or a recent Chrome on Android.
+  </div>
+  <div id="jswarn" class="warn" hidden></div>
+
+  <textarea id="input" placeholder="Paste the LinkedIn post here…"></textarea>
+
+  <div class="row">
+    <button id="go">Translate</button>
+    <select id="model" aria-label="Model">
+      <option value="Qwen2.5-1.5B-Instruct-q4f16_1-MLC">Qwen 2.5 1.5B (~1 GB)</option>
+    </select>
+    <button id="check" class="ghost" type="button">Check connection</button>
+  </div>
+
+  <div id="progress">
+    <div id="track"><div id="bar"></div></div>
+    <span id="ptext"></span>
+  </div>
+  <div id="status"></div>
+
+  <section id="out" hidden>
+    <p class="label">The gist</p>
+    <p id="result"></p>
+    <button class="ghost" id="copy">Copy</button>
+  </section>
+  <pre id="diag" hidden></pre>
+
+  <footer id="foot">Runs entirely in your browser using an open-weight model. Nothing you paste is sent to any server. A small model can misread a post, so treat the gist as a quick guess.</footer>
+</main>
+
+<script type="module">
+/* ============================================================
+   EDIT THIS BLOCK TO CHANGE THE WORDING, MODELS OR EXAMPLES
+   ============================================================ */
+const CONFIG = {
+  title: "LinkedIn Larp Translator",
+  tagline: "Paste the long, humbled-and-honored post. Get the one-line truth.",
+  placeholder: "Paste the LinkedIn post here…",
+  buttonLabel: "Translate",
+  footer: "Runs entirely in your browser using an open-weight model. Nothing you paste is sent to any server. A small model can misread a post, so treat the gist as a quick guess.",
+  models: [
+    { id: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC", label: "Qwen 2.5 1.5B (~1 GB)" },
+    { id: "Llama-3.2-1B-Instruct-q4f16_1-MLC", label: "Llama 3.2 1B (fastest, ~0.7 GB)" },
+    { id: "Llama-3.2-3B-Instruct-q4f16_1-MLC", label: "Llama 3.2 3B (best quality, ~2 GB)" }
+  ],
+
+  systemPrompt: `You translate long, exaggerated LinkedIn posts into the plain truth.
+Reply with exactly ONE short sentence, under 20 words, saying what the post actually says or what the person actually wants.
+No preamble, no quotation marks, no hashtags, no emojis, no second sentence, no commentary.
+Use only what is in the post. Never invent facts.`,
+
+  // Worked examples teach a small model the exact style and length wanted
+  examples: [
+    {
+      post: "I'm humbled and honored to share that after 7 incredible years, I've decided to embark on a new chapter. This journey taught me so much about leadership, resilience and the power of an amazing team. I'm so grateful to everyone who believed in me. Stay tuned, exciting things ahead! #newbeginnings #grateful",
+      gist: "Quit their job."
+    },
+    {
+      post: "Last week I was rejected by 12 companies. Most people would give up. I didn't. Instead I sat with my coffee at 5am and asked myself one question: what if failure is just feedback in disguise? Here are 7 lessons every leader should know. Number 3 will change your life. Agree? Repost to help others.",
+      gist: "Got rejected by 12 companies and is posting lessons for engagement."
+    },
+    {
+      post: "Thrilled to announce that I've been promoted to Senior Product Manager at Acme! None of this would be possible without my incredible mentors and the best team in the world. Grateful beyond words. On to the next challenge!",
+      gist: "Got promoted to Senior Product Manager at Acme."
+    },
+    {
+      post: "Nobody talks about this, but 90% of founders fail at hiring. I built a simple framework that fixed it across my 3 startups. I'm not selling anything. Comment FRAMEWORK below and I'll send you the free guide. Like and follow for more.",
+      gist: "Wants comments and follows so they can send a hiring guide."
+    }
+  ],
+
+  temperature: 0.2,
+  maxTokens: 60,
+  maxInputChars: 6000
+};
+/* ============================================================ */
+
+const $ = (id) => document.getElementById(id);
+
+// Fill in the page first, so nothing depends on the AI library loading
+$("title").textContent = CONFIG.title;
+document.title = CONFIG.title;
+$("sub").textContent = CONFIG.tagline;
+$("input").placeholder = CONFIG.placeholder;
+$("go").textContent = CONFIG.buttonLabel;
+$("foot").textContent = CONFIG.footer;
+
+const modelSel = $("model");
+modelSel.innerHTML = "";
+for (const m of CONFIG.models) {
+  const o = document.createElement("option");
+  o.value = m.id; o.textContent = m.label;
+  modelSel.appendChild(o);
+}
+
+if (!("gpu" in navigator)) {
+  $("gpuwarn").hidden = false;
+  $("go").disabled = true;
+}
+
+// Previews (for example inside a chat app) block the model downloads, so warn early
+if (["about:", "blob:", "data:"].includes(location.protocol)) {
+  $("jswarn").hidden = false;
+  $("jswarn").textContent =
+    "You seem to be viewing this inside a preview. Previews block the model download. " +
+    "Open the file in a normal Chrome or Edge tab, or use the hosted link.";
+}
+
+// Load the AI library only when needed, trying several sources
+let webllm = null;
+async function loadWebLLM() {
+  if (webllm) return webllm;
+  const sources = [
+    "https://esm.run/@mlc-ai/web-llm",
+    "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/+esm",
+    "https://esm.sh/@mlc-ai/web-llm"
+  ];
+  let lastErr = null;
+  for (const url of sources) {
+    try {
+      webllm = await import(url);
+      return webllm;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw new Error(
+    "Could not download the AI library. Check your internet connection, and try turning off ad blockers or a VPN. " +
+    "(Details: " + (lastErr && lastErr.message ? lastErr.message : lastErr) + ")"
+  );
+}
+
+let engine = null;
+let loadedModel = null;
+
+modelSel.addEventListener("change", async () => {
+  if (engine) { try { await engine.unload(); } catch (e) {} }
+  engine = null; loadedModel = null;
+});
+
+async function ensureEngine(modelId) {
+  if (engine && loadedModel === modelId) return;
+  $("progress").style.display = "block";
+  $("ptext").textContent = "Downloading the AI library…";
+  const lib = await loadWebLLM();
+  engine = await lib.CreateMLCEngine(modelId, {
+    initProgressCallback: (r) => {
+      $("bar").style.width = Math.round((r.progress || 0) * 100) + "%";
+      $("ptext").textContent = r.text || "Loading…";
+    }
+  });
+  loadedModel = modelId;
+  $("progress").style.display = "none";
+}
+
+// Keep exactly one short line, even if the model adds labels, quotes or extra sentences
+function cleanGist(raw) {
+  let t = (raw || "").trim();
+  t = t.split(/\n+/).map((s) => s.trim()).filter(Boolean)[0] || "";
+  t = t.replace(/^(gist|translation|summary|tl;dr|the gist)\s*[:\-]\s*/i, "");
+  t = t.replace(/^["'“‘]+/, "");
+  const m = t.match(/^(.+?[.!?])["'”’]*(\s|$)/);
+  if (m) t = m[1];
+  t = t.replace(/["'”’]+$/, "");
+  return t.trim();
+}
+
+$("go").addEventListener("click", async () => {
+  let post = $("input").value.trim();
+  if (!post) return;
+  const btn = $("go");
+  btn.disabled = true;
+  const original = btn.textContent;
+  $("out").hidden = true;
+  $("diag").hidden = true;
+  $("result").textContent = "";
+  $("status").textContent = "";
+  try {
+    btn.textContent = "Loading model…";
+    await ensureEngine(modelSel.value);
+    btn.textContent = "Translating…";
+
+    let note = "";
+    if (post.length > CONFIG.maxInputChars) {
+      post = post.slice(0, CONFIG.maxInputChars);
+      note = "The post was very long, so only the first part was read.";
+    }
+
+    const messages = [{ role: "system", content: CONFIG.systemPrompt }];
+    for (const ex of CONFIG.examples) {
+      messages.push({ role: "user", content: ex.post });
+      messages.push({ role: "assistant", content: ex.gist });
+    }
+    messages.push({ role: "user", content: post });
+
+    const res = await engine.chat.completions.create({
+      messages,
+      temperature: CONFIG.temperature,
+      max_tokens: CONFIG.maxTokens
+    });
+    const gist = cleanGist(res.choices[0]?.message?.content);
+    $("out").hidden = false;
+    $("result").textContent = gist || "Could not boil that down. Try again, or pick a bigger model.";
+    $("status").textContent = note;
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    const looksLikeNetwork = /fetch|network|load failed/i.test(msg);
+    $("out").hidden = false;
+    $("result").textContent = "Something went wrong: " + msg +
+      (looksLikeNetwork
+        ? " This usually means your browser could not download the model files. Press the Check connection button to see which download is failing."
+        : " Try a different model or reload the page.");
+    $("progress").style.display = "none";
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+});
+
+// Self-test: checks each step the model download depends on and shows which one fails
+$("check").addEventListener("click", async () => {
+  const chk = $("check");
+  chk.disabled = true;
+  const diag = $("diag");
+  diag.hidden = false;
+  const modelId = modelSel.value;
+  const base = "https://huggingface.co/mlc-ai/" + modelId + "/resolve/main/";
+  const lines = ["Page opened from: " + location.protocol +
+    (location.protocol === "about:" ? "  (a preview, which blocks downloads: open in a normal tab)" : "") +
+    (location.protocol === "file:" ? "  (a hosted https link is more reliable)" : "")];
+  const show = () => { diag.textContent = lines.join("\n"); };
+  let failures = 0;
+  const probe = async (label, fn) => {
+    lines.push("...   " + label); show();
+    const i = lines.length - 1;
+    try {
+      const info = await fn();
+      lines[i] = "OK    " + label + (info ? " (" + info + ")" : "");
+    } catch (e) {
+      failures++;
+      lines[i] = "FAIL  " + label + " : " + (e && e.message ? e.message : e);
+    }
+    show();
+  };
+  let shard = "params_shard_0.bin";
+
+  await probe("AI library host (cdn.jsdelivr.net)", async () => {
+    const r = await fetch("https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/package.json");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+  });
+  await probe("Model settings (huggingface.co)", async () => {
+    const r = await fetch(base + "mlc-chat-config.json");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+  });
+  await probe("Model code host (raw.githubusercontent.com)", async () => {
+    const r = await fetch("https://raw.githubusercontent.com/mlc-ai/web-llm/main/README.md", { method: "HEAD" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+  });
+  await probe("Model file list (huggingface.co)", async () => {
+    const r = await fetch(base + "tensor-cache.json");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    if (j && j.records && j.records[0] && j.records[0].dataPath) shard = j.records[0].dataPath;
+    return shard;
+  });
+  await probe("Model weights download (first bytes of " + shard + ")", async () => {
+    const r = await fetch(base + shard, { headers: { Range: "bytes=0-1023" } });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const reader = r.body.getReader();
+    await reader.read();
+    await reader.cancel();
+  });
+  await probe("Browser storage for caching the model", async () => {
+    if (!("caches" in self)) throw new Error("Cache storage is unavailable here (try the hosted https link)");
+    await caches.open("larp-test");
+    if (navigator.storage && navigator.storage.estimate) {
+      const est = await navigator.storage.estimate();
+      return Math.round((est.quota - est.usage) / 1e8) / 10 + " GB free";
+    }
+  });
+  await probe("WebGPU graphics access", async () => {
+    if (!navigator.gpu) throw new Error("WebGPU is not available in this browser");
+    const a = await navigator.gpu.requestAdapter();
+    if (!a) throw new Error("No GPU adapter found (update Chrome or graphics drivers)");
+  });
+
+  lines.push("");
+  lines.push(failures === 0
+    ? "All checks passed."
+    : "Some steps failed. Send this list to whoever is helping you.");
+  show();
+  chk.disabled = false;
+});
+
+$("copy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("result").textContent);
+    $("copy").textContent = "Copied";
+    setTimeout(() => ($("copy").textContent = "Copy"), 1500);
+  } catch (e) {}
+});
+</script>
+
+<script>
+  // If the main module script fails to start at all, say so instead of staying silent
+  window.addEventListener("error", function (e) {
+    var w = document.getElementById("jswarn");
+    if (w && w.hidden) {
+      w.hidden = false;
+      w.textContent = "The page hit a script error: " + (e && e.message ? e.message : "unknown") +
+        ". Try a current version of Chrome or Edge, and reload.";
+    }
+  });
+</script>
+</body>
+</html>
