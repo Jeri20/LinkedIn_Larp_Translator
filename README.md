@@ -1,4 +1,4 @@
-# Larp Translator
+# One-Liner
 
 Paste a long, "humbled and honored" LinkedIn post. Get the one-line truth.
 
