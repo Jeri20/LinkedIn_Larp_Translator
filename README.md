@@ -4,7 +4,8 @@ Paste a long, "humbled and honored" LinkedIn post. Get the one-line truth.
 
 **Live demo:** https://oneliner-ten.vercel.app/
 <!-- paste your Vercel or GitHub Pages link here -->
-<img width="855" height="882" alt="image" src="https://github.com/user-attachments/assets/283119ba-47b6-485f-b510-838e1dda7ee1" />
+<img width="846" height="887" alt="image" src="https://github.com/user-attachments/assets/cf1d5c3d-efd4-4ce1-835e-45b080093bc1" />
+
 
 
 ## What it does
